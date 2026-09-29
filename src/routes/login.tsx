@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,14 +7,26 @@ import { GradientMesh } from "@/components/ui-custom/GradientMesh";
 import { Button } from "@/components/ui/button";
 
 import { BRAND } from "@/lib/brand";
+import { startDemo } from "@/lib/demo.functions";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
   validateSearch: (
     s: Record<string, unknown>,
-  ): { redirect?: string; mode?: "signin" | "signup" } => ({
+  ): { redirect?: string; mode?: "signin" | "signup"; demo?: "1" } => ({
     ...(typeof s.redirect === "string" ? { redirect: s.redirect } : {}),
     ...(s.mode === "signup" || s.mode === "signin" ? { mode: s.mode as "signin" | "signup" } : {}),
+    ...(s.demo === "1" ? { demo: "1" as const } : {}),
+  }),
+  head: () => ({
+    meta: [
+      { title: `Sign in — ${BRAND.shortName}` },
+      { name: "description", content: `Sign in to ${BRAND.name} — ${BRAND.tagline}.` },
+      { property: "og:title", content: `Sign in — ${BRAND.shortName}` },
+      { property: "og:description", content: `Sign in to ${BRAND.name} — ${BRAND.tagline}.` },
+      { property: "og:type", content: "website" },
+    ],
   }),
   component: LoginPage,
 });
@@ -29,14 +41,45 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [demoBusy, setDemoBusy] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
   const [resendBusy, setResendBusy] = useState(false);
+  const demoStartedRef = useRef(false);
+  const startDemoFn = useServerFn(startDemo);
 
   useEffect(() => {
     if (!loading && session) {
       nav({ to: (search.redirect ?? "/dashboard") as "/dashboard", replace: true });
     }
   }, [session, loading, nav, search.redirect]);
+
+  // /login?demo=1 drops the visitor straight into the shared demo account —
+  // no email, no signup. Guarded so it runs once per mount.
+  useEffect(() => {
+    if (!search.demo || loading || session || demoStartedRef.current) return;
+    demoStartedRef.current = true;
+    void runDemo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.demo, loading, session]);
+
+  const runDemo = async () => {
+    setDemoBusy(true);
+    try {
+      const { email, token } = await startDemoFn();
+      // generateLink returns a *hashed* one-time token — verifyOtp expects
+      // only token_hash + type for that path.
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: token,
+        type: "magiclink",
+      });
+      if (error) throw error;
+      // The auth listener picks up the session and routes onward.
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not start the demo");
+    } finally {
+      setDemoBusy(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -412,6 +455,24 @@ function LoginPage() {
                     ← Back to sign in
                   </button>
                 )}
+              </div>
+
+              <div className="mt-5 border-t border-glass-border/60 pt-4 text-center">
+                <button
+                  type="button"
+                  onClick={runDemo}
+                  disabled={busy || demoBusy}
+                  className="text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+                >
+                  {demoBusy ? (
+                    "Opening the demo…"
+                  ) : (
+                    <>
+                      Just looking?{" "}
+                      <span className="text-primary hover:underline">Explore the demo →</span>
+                    </>
+                  )}
+                </button>
               </div>
               </>
               )}
