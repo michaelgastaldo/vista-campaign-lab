@@ -120,11 +120,15 @@ function LandingPage() {
             </Link>
             <Link
               to="/login"
+              search={{ demo: "1" }}
               className="inline-flex items-center justify-center rounded-full border border-glass-border bg-glass/40 px-6 py-3 text-sm text-foreground hover:bg-glass-strong"
             >
-              Sign in
+              Explore the demo <IconArrowRight size={14} />
             </Link>
           </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            No email needed — the demo drops you into a fully loaded workspace.
+          </p>
         </section>
 
         <section className="mt-16 sm:mt-24">
