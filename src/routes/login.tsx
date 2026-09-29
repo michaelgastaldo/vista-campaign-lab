@@ -66,7 +66,13 @@ function LoginPage() {
     setDemoBusy(true);
     try {
       const { email, token } = await startDemoFn();
-      const { error } = await supabase.auth.verifyOtp({ email, token, type: "magiclink" });
+      // generateLink returns a *hashed* one-time token — verifyOtp expects it
+      // as token_hash, not token.
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token_hash: token,
+        type: "magiclink",
+      });
       if (error) throw error;
       // The auth listener picks up the session and routes onward.
     } catch (err) {
